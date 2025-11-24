@@ -13,10 +13,10 @@
 
                 <!-- Código -->
                 <div class="col-12 col-lg-4">
-                    <label for="codigo" class="form-label fw-semibold">Código del periferico o equipo</label>
+                    <label for="query" class="form-label fw-semibold">Código del periferico o equipo</label>
                     <div class="input-group has-validation">
-                        <input id="codigo" type="text" class="form-control @error('codigo') is-invalid @enderror"
-                            placeholder="Ej. 12345 o 123456789012" wire:model.live="codigo"
+                        <input id="query" type="text" class="form-control @error('query') is-invalid @enderror"
+                            placeholder="Ej. 12345 o 123456789012" wire:model.live="query"
                             aria-describedby="codigoFeedback" oninput="this.value = this.value.replace(/[^0-9]/g,'')">
 
                         <button id="btnScan" type="button" class="btn btn-outline-primary" data-bs-toggle="modal"
@@ -25,7 +25,7 @@
                         </button>
 
                         <div id="codigoFeedback" class="invalid-feedback">
-                            @error('codigo')
+                            @error('query')
                                 {{ $message }}
                             @enderror
                         </div>
@@ -55,12 +55,7 @@
                 </div>
 
                 <div class="col-12 col-lg-2 d-grid gap-2">
-                    <!-- Botón Seleccionar -->
-                    <button class="btn btn-success" type="button" @disabled(@empty($idEqo))
-                        wire:click="MostrarConectividadIncidencia">
-                        <i class="bi bi-check-circle me-1"></i> Seleccionar
-                    </button>
-
+                  
                     <!-- Botón Limpiar filtros -->
                     <button class="btn btn-outline-secondary" type="button" wire:click="limpiar">
                         <i class="bi bi-eraser me-1"></i> Limpiar filtros
@@ -543,3 +538,373 @@
             }
         })();
     </script>
+<script>
+    (() => {
+        let stream = null;
+        let usingBack = true;
+        let detector = null;
+        let detectLoopId = null;
+        let alreadyHandled = false;
+
+        const video = document.getElementById('scannerVideo');
+        const canvas = document.getElementById('scannerCanvas');
+        const status = document.getElementById('scannerStatus');
+        const btnUse = document.getElementById('useManualBarcode');
+        const txtMan = document.getElementById('manualBarcode');
+        const btnFlip = document.getElementById('switchCamera');
+        const supportedFormats = [
+            'code_128', 'code_39', 'code_93', 'ean_13', 'ean_8',
+            'upc_a', 'upc_e', 'itf', 'codabar', 'data_matrix', 'qr_code'
+        ];
+
+        // ------------- utilidades -------------
+        function stopCamera() {
+            if (detectLoopId) {
+                cancelAnimationFrame(detectLoopId);
+                detectLoopId = null;
+            }
+            if (stream) {
+                stream.getTracks().forEach(t => t.stop());
+                stream = null;
+            }
+            if (video) {
+                video.pause();
+                video.srcObject = null;
+            }
+        }
+
+        async function ensureDetector() {
+            if (!('BarcodeDetector' in window)) {
+                throw new Error('Este navegador no soporta BarcodeDetector.');
+            }
+            if (!detector) {
+                try {
+                    detector = new window.BarcodeDetector({
+                        formats: supportedFormats
+                    });
+                } catch {
+                    detector = new window.BarcodeDetector();
+                }
+            }
+            return detector;
+        }
+
+        async function startCamera() {
+            stopCamera();
+            alreadyHandled = false;
+            status.textContent = 'Abriendo cámara...';
+            const constraints = {
+                video: {
+                    facingMode: usingBack ? {
+                        ideal: 'environment'
+                    } : 'user',
+                    width: {
+                        ideal: 1280
+                    },
+                    height: {
+                        ideal: 720
+                    }
+                }
+            };
+            stream = await navigator.mediaDevices.getUserMedia(constraints);
+            video.srcObject = stream;
+            await video.play();
+            status.textContent = 'Apunta el código dentro del marco.';
+            startDetectLoop();
+        }
+
+        // ------------- detección -------------
+        function startDetectLoop() {
+            const ctx = canvas.getContext('2d', {
+                willReadFrequently: true
+            });
+            const step = async () => {
+                try {
+                    if (video.readyState >= 2 && !alreadyHandled) {
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        const bitmap = await createImageBitmap(canvas);
+                        const det = await ensureDetector();
+                        const codes = await det.detect(bitmap);
+                        if (codes.length) {
+                            const raw = (codes[0].rawValue || '').trim();
+                            if (raw && !alreadyHandled) {
+                                alreadyHandled = true;
+                                handleCode(raw);
+                                return;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error(e);
+                    status.textContent = 'No pude leer. Mejora la luz o usa el campo manual.';
+                }
+                detectLoopId = requestAnimationFrame(step);
+            };
+            detectLoopId = requestAnimationFrame(step);
+        }
+
+        // ------------- cierre y Livewire -------------
+        function forceCloseModal(id) {
+            const el = document.getElementById(id);
+            if (!el) return;
+
+            // Obtén la instancia del modal
+            const modal = bootstrap.Modal.getInstance(el);
+            if (modal) {
+                modal.hide(); // Cierra el modal
+            } else {
+                // Si la instancia no existe, créala e instanciarla
+                const newModal = new bootstrap.Modal(el);
+                newModal.hide();
+            }
+
+            // Elimina el fondo (backdrop)
+            const backdrop = document.querySelector('.modal-backdrop');
+            if (backdrop) {
+                backdrop.classList.remove('show'); // Elimina la clase show del backdrop
+                document.body.classList.remove('modal-open'); // Elimina la clase modal-open del body
+                document.body.style.removeProperty('padding-right'); // Restaura el padding-right del body
+            }
+
+            // Fallback para asegurar que el modal se cierre correctamente
+            setTimeout(() => {
+                el.classList.remove('show'); // Elimina la clase show del modal
+                document.querySelectorAll('.modal-backdrop.show').forEach(e => e
+                    .remove()); // Elimina todos los backdrops visibles
+            }, 300);
+        }
+
+        function handleCode(code) {
+            stopCamera();
+            forceCloseModal('scannerModal'); // Cierra el modal del escáner
+            Livewire.dispatch('scanner:code-detected', {
+                code
+            }); // Dispara el evento Livewire
+
+            console.log("Cerrando appModal...");
+
+            // Asegúrate de cerrar appModal después de que el evento Livewire se procese
+            setTimeout(() => {
+                forceCloseModal(
+                    'appModal'); // Asegura que appModal se cierre después de que se procese el código.
+            }, 300); // Dale tiempo para el evento Livewire y el modal de confirmación
+        }
+
+
+
+        // ------------- eventos UI -------------
+        btnUse?.addEventListener('click', () => {
+            const code = (txtMan?.value || '').trim();
+            if (!code) return;
+            alreadyHandled = true;
+            handleCode(code);
+        });
+
+        btnFlip?.addEventListener('click', async () => {
+            usingBack = !usingBack;
+            try {
+                await startCamera();
+            } catch {
+                status.textContent = 'No pude cambiar cámara.';
+            }
+        });
+
+        document.getElementById('scannerModal')?.addEventListener('shown.bs.modal', async () => {
+            try {
+                await ensureDetector();
+                await startCamera();
+            } catch (e) {
+                console.error(e);
+                status.innerHTML = 'Tu navegador no soporta escaneo. Usa el campo manual.';
+            }
+        });
+        document.getElementById('scannerModal')?.addEventListener('hidden.bs.modal', stopCamera);
+    })();
+</script>
+<script>
+    (() => {
+        let stream = null;
+        let usingBack = true;
+        let detector = null;
+        let detectLoopId = null;
+        let alreadyHandled = false;
+
+        const video = document.getElementById('scannerVideo');
+        const canvas = document.getElementById('scannerCanvas');
+        const status = document.getElementById('scannerStatus');
+        const btnUse = document.getElementById('useManualBarcode');
+        const txtMan = document.getElementById('manualBarcode');
+        const btnFlip = document.getElementById('switchCamera');
+        const supportedFormats = [
+            'code_128', 'code_39', 'code_93', 'ean_13', 'ean_8',
+            'upc_a', 'upc_e', 'itf', 'codabar', 'data_matrix', 'qr_code'
+        ];
+
+        // ------------- utilidades -------------
+        function stopCamera() {
+            if (detectLoopId) {
+                cancelAnimationFrame(detectLoopId);
+                detectLoopId = null;
+            }
+            if (stream) {
+                stream.getTracks().forEach(t => t.stop());
+                stream = null;
+            }
+            if (video) {
+                video.pause();
+                video.srcObject = null;
+            }
+        }
+
+        async function ensureDetector() {
+            if (!('BarcodeDetector' in window)) {
+                throw new Error('Este navegador no soporta BarcodeDetector.');
+            }
+            if (!detector) {
+                try {
+                    detector = new window.BarcodeDetector({
+                        formats: supportedFormats
+                    });
+                } catch {
+                    detector = new window.BarcodeDetector();
+                }
+            }
+            return detector;
+        }
+
+        async function startCamera() {
+            stopCamera();
+            alreadyHandled = false;
+            status.textContent = 'Abriendo cámara...';
+            const constraints = {
+                video: {
+                    facingMode: usingBack ? {
+                        ideal: 'environment'
+                    } : 'user',
+                    width: {
+                        ideal: 1280
+                    },
+                    height: {
+                        ideal: 720
+                    }
+                }
+            };
+            stream = await navigator.mediaDevices.getUserMedia(constraints);
+            video.srcObject = stream;
+            await video.play();
+            status.textContent = 'Apunta el código dentro del marco.';
+            startDetectLoop();
+        }
+
+        // ------------- detección -------------
+        function startDetectLoop() {
+            const ctx = canvas.getContext('2d', {
+                willReadFrequently: true
+            });
+            const step = async () => {
+                try {
+                    if (video.readyState >= 2 && !alreadyHandled) {
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+                        const bitmap = await createImageBitmap(canvas);
+                        const det = await ensureDetector();
+                        const codes = await det.detect(bitmap);
+                        if (codes.length) {
+                            const raw = (codes[0].rawValue || '').trim();
+                            if (raw && !alreadyHandled) {
+                                alreadyHandled = true;
+                                handleCode(raw);
+                                return;
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error(e);
+                    status.textContent = 'No pude leer. Mejora la luz o usa el campo manual.';
+                }
+                detectLoopId = requestAnimationFrame(step);
+            };
+            detectLoopId = requestAnimationFrame(step);
+        }
+
+        // ------------- cierre y Livewire -------------
+        function forceCloseModal(id) {
+            const el = document.getElementById(id);
+            if (!el) return;
+
+            // Obtén la instancia del modal
+            const modal = bootstrap.Modal.getInstance(el);
+            if (modal) {
+                modal.hide(); // Cierra el modal
+            } else {
+                // Si la instancia no existe, créala e instanciarla
+                const newModal = new bootstrap.Modal(el);
+                newModal.hide();
+            }
+
+            // Elimina el fondo (backdrop)
+            const backdrop = document.querySelector('.modal-backdrop');
+            if (backdrop) {
+                backdrop.classList.remove('show'); // Elimina la clase show del backdrop
+                document.body.classList.remove('modal-open'); // Elimina la clase modal-open del body
+                document.body.style.removeProperty('padding-right'); // Restaura el padding-right del body
+            }
+
+            // Fallback para asegurar que el modal se cierre correctamente
+            setTimeout(() => {
+                el.classList.remove('show'); // Elimina la clase show del modal
+                document.querySelectorAll('.modal-backdrop.show').forEach(e => e
+                    .remove()); // Elimina todos los backdrops visibles
+            }, 300);
+        }
+
+        function handleCode(code) {
+            stopCamera();
+            forceCloseModal('scannerModal'); // Cierra el modal del escáner
+            Livewire.dispatch('scanner:code-detected', {
+                code
+            }); // Dispara el evento Livewire
+
+            console.log("Cerrando appModal...");
+
+            // Asegúrate de cerrar appModal después de que el evento Livewire se procese
+            setTimeout(() => {
+                forceCloseModal(
+                    'appModal'); // Asegura que appModal se cierre después de que se procese el código.
+            }, 300); // Dale tiempo para el evento Livewire y el modal de confirmación
+        }
+
+
+
+        // ------------- eventos UI -------------
+        btnUse?.addEventListener('click', () => {
+            const code = (txtMan?.value || '').trim();
+            if (!code) return;
+            alreadyHandled = true;
+            handleCode(code);
+        });
+
+        btnFlip?.addEventListener('click', async () => {
+            usingBack = !usingBack;
+            try {
+                await startCamera();
+            } catch {
+                status.textContent = 'No pude cambiar cámara.';
+            }
+        });
+
+        document.getElementById('scannerModal')?.addEventListener('shown.bs.modal', async () => {
+            try {
+                await ensureDetector();
+                await startCamera();
+            } catch (e) {
+                console.error(e);
+                status.innerHTML = 'Tu navegador no soporta escaneo. Usa el campo manual.';
+            }
+        });
+        document.getElementById('scannerModal')?.addEventListener('hidden.bs.modal', stopCamera);
+    })();
+</script>

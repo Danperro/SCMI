@@ -38,7 +38,6 @@ class Control extends Component
     public $idMan = [];
     public $idLab = '';
     public $busquedaEquipo = '';
-    public $equiposcombo = [];
     public $equipos = [];
     public $mantsoft = [];
     public $manthard = [];
@@ -58,7 +57,7 @@ class Control extends Component
     }
     public function limpiar()
     {
-        $this->reset(['query', 'idLab', 'idEqo', 'idTpm']);
+        $this->reset(['query', 'idLab', 'idEqo', 'idTpm', 'mantsoft', 'manthard', 'idMan', 'mantenimientosFiltrados', 'equipos']);
         $this->resetErrorBag();
         $this->resetValidation();
     }
@@ -115,29 +114,33 @@ class Control extends Component
 
     public function updatedIdLab()
     {
-
+        $this->reset('equipos');
         $this->equipos = equipo::where('IdLab', $this->idLab)
             ->orderByRaw('CAST(SUBSTRING(NombreEqo,4)AS UNSIGNED)ASC')
             ->get();
     }
 
+    public function updatedIdEqo()
+    {
+
+        $this->idMan = ((int)$this->idTpm === 2)
+            ? []                                   // Correctivo: vacíos
+            : $this->obtenerIdsMantenimientosHoy(); // Preventivo: lo de hoy
+    }
+
     public function updatedQuery()
     {
-        //$this->reset('idEqo');
 
         if (preg_match('/^[0-9]{8,20}$/', trim($this->query ?? ''))) {
-            $this->selectByBarcode($this->query);
+            $this->onCodeDetected($this->query);
         }
     }
 
     public function updatedIdTpm()
     {
-        //aaaa
         if ((int)$this->idTpm === 2) {
-            // Correctivo: sin preselección
             $this->idMan = [];
         } else {
-            // Preventivo (u otros): precargar lo ya hecho hoy
             $this->idMan = $this->obtenerIdsMantenimientosHoy();
         }
 
@@ -159,13 +162,6 @@ class Control extends Component
         return [];
     }
 
-    public function updatedIdEqo()
-    {
-        $this->idMan = ((int)$this->idTpm === 2)
-            ? []                                   // Correctivo: vacíos
-            : $this->obtenerIdsMantenimientosHoy(); // Preventivo: lo de hoy
-    }
-
     public function actualizarSeleccion($idMantenimiento, $checked)
     {
 
@@ -181,31 +177,10 @@ class Control extends Component
         $this->validateOnly('idMan', $this->rules());
     }
 
-
-
-    public function selectEquipoPorBusqueda(string $busqueda)
-    {
-        $this->query = trim($busqueda);
-        $equipos = equipo::query()
-            ->when(!empty($this->idLab), fn($q) => $q->where('IdLab', $this->idLab))
-            ->search($this->query)
-            ->orderBy('NombreEqo')
-            ->get();
-
-        $this->equiposcombo = $equipos;
-
-        if ($equipos->count() === 1) {
-            $this->idEqo = $equipos->first()->IdEqo;
-        } else {
-            if ($this->idEqo && !$equipos->pluck('IdEqo')->contains($this->idEqo)) {
-                $this->idEqo = null;
-            }
-        }
-    }
-
     #[On('scanner:code-detected')]
     public function onCodeDetected(string $code)
     {
+        
         $this->query = trim($code);
         $this->resetPage();
 
@@ -217,11 +192,8 @@ class Control extends Component
         if ($item) {
             // ✅ sincroniza los selects
             $this->idLab  =  $item->equipo->IdLab;
-            $this->equipos = equipo::where('IdLab', $this->idLab)
-                ->orderBy('NombreEqo')
-                ->get();
-            $this->idEqo  =  $item->equipo->IdEqo;
-
+            $this->equipos = equipo::get();
+            $this->idEqo  =  $item->IdEqo;
 
             // Mensaje de confirmación
             $this->modalTitle   = 'Equipo encontrado';
@@ -247,7 +219,7 @@ class Control extends Component
             ]);
         } else {
             // Limpia filtros si no se halló
-            $this->idLab     = null;
+            $this->idLab = null;
             $this->idEqo = null;
 
             $this->modalTitle   = 'Sin coincidencias';
@@ -261,46 +233,6 @@ class Control extends Component
                 'autoclose' => 2500,
             ]);
         }
-    }
-
-
-    public function selectByBarcode(string $codigo)
-    {
-        $codigo = trim($codigo);
-        if ($codigo === '') return;
-
-        $periferico = periferico::with('equipos')
-            ->byInventario($codigo)
-            ->first();
-
-        if (!$periferico || $periferico->equipos->isEmpty()) {
-            $this->modalTitle   = 'No encontrado';
-            $this->modalMessage = "No existe equipo asociado al código: {$codigo}";
-            $this->modalIcon    = 'bi bi-exclamation-triangle-fill text-warning';
-            $this->dispatch('modal-open');
-            return;
-        }
-
-        $equipo = $periferico->equipos->first();
-
-        $this->idLab = $equipo->IdLab;
-        $this->idEqo = $equipo->IdEqo;
-        $this->equiposcombo = equipo::where('IdLab', $this->idLab)
-            ->orderBy('NombreEqo')
-            ->get(['IdEqo', 'NombreEqo']);
-
-        $this->query = $codigo;
-        //aaaa
-        $this->idMan = ((int)$this->idTpm === 2)
-            ? []                                   // Correctivo
-            : $this->obtenerIdsMantenimientosHoy(); // Preventivo
-
-
-
-        $this->modalTitle   = 'Equipo encontrado';
-        $this->modalMessage = "Se seleccionó: {$equipo->NombreEqo} (Lab: {$equipo->IdLab})";
-        $this->modalIcon    = 'bi bi-check-circle-fill text-success';
-        $this->dispatch('modal-open');
     }
 
 
@@ -424,7 +356,6 @@ class Control extends Component
             // Reset de UI
             $this->reset('idEqo', 'idTpm', 'idClm', 'idMan', 'idLab', 'query');
             $this->mantenimientosFiltrados = [];
-            $this->equiposcombo = [];
             $this->mantsoft = [];
             $this->manthard = [];
             $this->mantenimientoRealizado = true;
@@ -488,8 +419,6 @@ class Control extends Component
         }
     }
 
-
-
     public function seleccionarTodos($checked)
     {
         if ($checked) {
@@ -523,7 +452,13 @@ class Control extends Component
 
 
         $laboratorios = laboratorio::get();
-        $equipos = $this->equipos;
+        if ($this->idLab) {
+            $this->equipos = equipo::where('IdLab', $this->idLab)
+                ->orderByRaw('CAST(SUBSTRING(NombreEqo,4)AS UNSIGNED)ASC')
+                ->get();
+        } else {
+            $this->equipos = equipo::get();
+        }
         $tipoman = tipomantenimiento::get();
         $claseman = clasemantenimiento::get();
 
@@ -531,6 +466,7 @@ class Control extends Component
 
         return view('livewire.Control.Control', [
             'laboratorios' => $laboratorios,
+
             'equipos' => $this->equipos,
             'tipoman' => $tipoman,
             'claseman' => $claseman,

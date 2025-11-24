@@ -33,10 +33,10 @@
                     </div>
                 </div>
 
-                <div class="col-12 col-lg-3">
+                <div class="col-12 col-lg-2">
                     <label for="idLab" class="form-label fw-semibold">Seleccionar laboratorio</label>
                     <select id="idLab" class="form-select" wire:model.live="idLab">
-                        <option value="" hidden>Selecciona un laboratorio</option>
+                        <option value="" hidden>Seleccionar</option>
                         @foreach ($laboratorios as $lab)
                             <option value="{{ $lab->IdLab }}">{{ $lab->NombreLab }}</option>
                         @endforeach
@@ -45,7 +45,7 @@
 
                 <div class="col-12 col-lg-2">
                     <label for="idEqo" class="form-label fw-semibold">Seleccionar equipo</label>
-                    <select id="idEqo" class="form-select" wire:model.live="idEqo">
+                    <select id="idEqo" class="form-select" wire:model.live="idEqo" @disabled(@empty($idLab))>
                         <option value="" hidden>Seleccionar</option>
                         @foreach ($equipos as $eqo)
                             <option value="{{ $eqo->IdEqo }}">{{ $eqo->NombreEqo }}</option>
@@ -53,8 +53,8 @@
                     </select>
                 </div>
 
-                <div class="col-12 col-lg-2">
-                    <label for="idTpm" class="form-label fw-semibold">Tipo</label>
+                <div class="col-12 col-lg-3">
+                    <label for="idTpm" class="form-label fw-semibold">Seleccionar Tipo</label>
                     <select id="idTpm" class="form-select" wire:model.live="idTpm" @disabled(@empty($idEqo))>
                         <option value="" hidden>Tipo</option>
                         @foreach ($tipoman as $tip)
@@ -232,311 +232,7 @@
 
 </div>
 
-<script>
-    (() => {
-        let stream = null;
-        let usingBack = true;
-        let detector = null;
-        let detectLoopId = null;
-        let alreadyHandled = false; // <— guardia anti-repetidos
 
-        const video = document.getElementById('scannerVideo');
-        const canvas = document.getElementById('scannerCanvas');
-        const status = document.getElementById('scannerStatus');
-        const btnUse = document.getElementById('useManualBarcode');
-        const txtMan = document.getElementById('manualBarcode');
-        const btnFlip = document.getElementById('switchCamera');
-
-        const supportedFormats = [
-            'code_128', 'code_39', 'code_93', 'ean_13', 'ean_8', 'upc_a', 'upc_e', 'itf', 'codabar',
-            'data_matrix', 'qr_code'
-        ];
-
-        function setQueryValue(code) {
-            const input = document.getElementById('query');
-            if (input) {
-                input.value = code;
-                input.dispatchEvent(new Event('input', {
-                    bubbles: true
-                }));
-            }
-        }
-
-        function showToast(variant, title, message) {
-            // dispara un SOLO evento; tus manejadores deben existir una sola vez
-            const event = new CustomEvent('modal-open', {
-                detail: {
-                    payload: {
-                        variant,
-                        title,
-                        message,
-                        autoclose: 2000
-                    }
-                }
-            });
-            window.dispatchEvent(event);
-        }
-
-        async function ensureDetector() {
-            if (!('BarcodeDetector' in window)) {
-                console.warn("BarcodeDetector no soportado. Usando jsQR como alternativa.");
-                // Si BarcodeDetector no está disponible, usar jsQR
-                return false; // Indicamos que vamos a usar jsQR
-            }
-            if (!detector) {
-                try {
-                    detector = new window.BarcodeDetector({
-                        formats: supportedFormats
-                    });
-                } catch {
-                    detector = new window.BarcodeDetector();
-                }
-            }
-            return detector;
-        }
-
-
-        async function startCamera() {
-            stopCamera();
-            alreadyHandled = false; // <— reset del guard
-            status.textContent = 'Abriendo cámara...';
-            const constraints = {
-                audio: false,
-                video: {
-                    facingMode: usingBack ? {
-                        ideal: 'environment'
-                    } : 'user',
-                    width: {
-                        ideal: 1280
-                    },
-                    height: {
-                        ideal: 720
-                    }
-                }
-            };
-            stream = await navigator.mediaDevices.getUserMedia(constraints);
-            video.srcObject = stream;
-            await video.play();
-            status.textContent = 'Apunta el código dentro del marco.';
-            startDetectLoop();
-        }
-
-        function stopCamera() {
-            if (detectLoopId) {
-                cancelAnimationFrame(detectLoopId);
-                detectLoopId = null;
-            }
-            if (stream) {
-                stream.getTracks().forEach(t => t.stop());
-                stream = null;
-            }
-            if (video) {
-                video.pause();
-                video.srcObject = null;
-            }
-        }
-
-        function startDetectLoop() {
-            const ctx = canvas.getContext('2d', {
-                willReadFrequently: true
-            });
-
-            const step = async () => {
-                try {
-                    if (video.readyState >= 2 && !alreadyHandled) {
-                        // Ajustar el tamaño del canvas
-                        canvas.width = video.videoWidth || canvas.clientWidth || 1280;
-                        canvas.height = video.videoHeight || canvas.clientHeight || 720;
-                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
-                        const bitmap = await createImageBitmap(canvas);
-
-                        // Usamos el detector adecuado según la disponibilidad
-                        const detectorUsed = await ensureDetector();
-
-                        if (detectorUsed) {
-                            // Si BarcodeDetector está disponible, usarlo
-                            const codes = await detectorUsed.detect(bitmap);
-                            if (codes && codes.length) {
-                                const raw = (codes[0].rawValue || '').trim();
-                                if (raw && !alreadyHandled) {
-                                    alreadyHandled = true; // Corta repetidos
-                                    handleCode(raw);
-                                    return;
-                                }
-                            }
-                        } else {
-                            // Si BarcodeDetector no está disponible, usar jsQR
-                            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-                            const code = jsQR(imageData.data, canvas.width, canvas.height);
-                            if (code) {
-                                if (!alreadyHandled) {
-                                    alreadyHandled = true; // Corta repetidos
-                                    handleCode(code.data); // Usamos `code.data` en lugar de `raw`
-                                    return;
-                                }
-                            }
-                        }
-                    }
-                } catch (err) {
-                    console.error(err);
-                    status.textContent =
-                        'No pude leer nada. Acerca más, mejora la luz o usa el campo manual.';
-                }
-                detectLoopId = requestAnimationFrame(step);
-            };
-            detectLoopId = requestAnimationFrame(step);
-        }
-
-
-        function handleCode(code) {
-            stopCamera();
-
-            // Cierra el modal del escáner antes de cualquier otro
-            const modalEl = document.getElementById('scannerModal');
-            const modal = bootstrap.Modal.getInstance(modalEl) || bootstrap.Modal.getOrCreateInstance(modalEl);
-            modal.hide();
-
-            // Pasa el valor al input y dispara Livewire
-            setQueryValue(code);
-            try {
-                const root = document.querySelector('[wire\\:id]');
-                const compId = root?.getAttribute('wire:id');
-                if (compId && window.Livewire?.find) {
-                    window.Livewire.find(compId).call('selectByBarcode', code);
-                }
-            } catch (e) {
-                console.error('No pude invocar Livewire:', e);
-            }
-
-            // Luego el modal de confirmación
-            showToast('success', 'Código detectado', `Leído: ${code}`);
-        }
-        window.handleCode = handleCode;
-
-        btnUse?.addEventListener('click', () => {
-            const code = (txtMan?.value || '').trim();
-            if (!code) return;
-            alreadyHandled = true;
-            handleCode(code);
-        });
-
-        btnFlip?.addEventListener('click', async () => {
-            usingBack = !usingBack;
-            try {
-                await startCamera();
-            } catch {
-                status.textContent = 'No pude cambiar de cámara.';
-            }
-        });
-
-        document.getElementById('scannerModal')?.addEventListener('shown.bs.modal', async () => {
-            try {
-                await ensureDetector();
-                await startCamera();
-            } catch (e) {
-                console.error(e);
-                status.innerHTML =
-                    'Tu navegador no soporta escaneo nativo. Usa el campo manual o un navegador compatible.';
-            }
-        });
-        document.getElementById('scannerModal')?.addEventListener('hidden.bs.modal', () => {
-            stopCamera();
-        });
-
-        /* Evita registrar doble “showAppModal” si ya lo hiciste en otro script */
-        if (!window.__appModalInit) {
-            window.__appModalInit = true;
-            // aquí puedes dejar tu único bloque que escucha 'modal-open'
-            window.addEventListener('modal-open', (e) => {
-                const d = e?.detail?.payload ?? e?.detail ?? {};
-                // showAppModal(d);  // usa tu implementación ya existente
-            });
-        }
-    })();
-</script>
-
-
-
-<script>
-    document.addEventListener('DOMContentLoaded', () => {
-        const iconMap = {
-            success: 'bi-check-circle-fill text-success',
-            warning: 'bi-exclamation-triangle-fill text-warning',
-            danger: 'bi-x-circle-fill text-danger',
-            info: 'bi-info-circle-fill text-info'
-        };
-
-        function showAppModal(d) {
-            console.log('Mostrando modal con datos:', d); // Debug
-
-            if (!d || typeof d !== 'object') d = {};
-            const title = d.title ?? 'Aviso';
-            const message = d.message ?? '';
-            const variant = d.variant ?? 'info';
-            const autoclose = Number(d.autoclose ?? 2000);
-
-            // Los IDs ahora coinciden con el HTML
-            const iconEl = document.getElementById('appModalIcon');
-            const titleEl = document.getElementById('appModalTitle');
-            const msgEl = document.getElementById('appModalMessage');
-
-            if (iconEl) {
-                iconEl.className = `bi ${iconMap[variant] || iconMap.info}`;
-                iconEl.style.fontSize = '4rem';
-            }
-            if (titleEl) titleEl.textContent = title;
-            if (msgEl) msgEl.textContent = message;
-
-            const modalEl = document.getElementById('appModal');
-            if (!modalEl) {
-                console.error('Modal #appModal no encontrado');
-                return;
-            }
-
-            const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
-            modal.show();
-
-            if (!Number.isNaN(autoclose) && autoclose > 0) {
-                setTimeout(() => modal.hide(), autoclose);
-            }
-        }
-
-        // Escucha eventos de Livewire
-        document.addEventListener('livewire:init', () => {
-            console.log('Livewire inicializado'); // Debug
-
-            if (window.Livewire && typeof Livewire.on === 'function') {
-                Livewire.on('modal-open', (event) => {
-                    console.log('Evento modal-open recibido:', event); // Debug
-
-                    // En Livewire v3, el evento viene directamente o dentro de payload
-                    const data = event.payload || event;
-                    showAppModal(data);
-                });
-            }
-        });
-
-        // Fallback para eventos del window
-        window.addEventListener('modal-open', (e) => {
-            console.log('Evento window modal-open:', e.detail); // Debug
-
-            const detail = e.detail;
-            const d = detail && detail.payload ? detail.payload : detail;
-            showAppModal(d);
-        });
-
-        // Test manual (puedes eliminar esto después)
-        window.testModal = function() {
-            showAppModal({
-                title: 'Test Modal',
-                message: 'Este es un mensaje de prueba',
-                variant: 'success',
-                autoclose: 3000
-            });
-        };
-    });
-</script>
 <!-- Utilidades de modales -->
 <script>
     document.addEventListener('DOMContentLoaded', () => {

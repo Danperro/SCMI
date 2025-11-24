@@ -148,7 +148,7 @@
                             </div>
                         </div>
 
-                        <div class="mb-3">
+                        <div class="md-3">
                             <label for="nombreMan" class="form-label">Nombre del mantenimiento</label>
                             <input type="text" id="nombreMan" name="nombreMan" class="form-control"
                                 placeholder="Ej: Actualización de SO" wire:model.live="nombreMan" required>

@@ -7,25 +7,37 @@ use App\Models\equipo;
 use App\Models\laboratorio;
 use App\Models\mantenimiento;
 use App\Models\periferico;
-use App\Models\usuario;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 use Illuminate\Support\Facades\Log;
 use Livewire\Attributes\On;
+use Livewire\Attributes\Url;
+use Livewire\WithPagination;
 
 class ConectividadIncidencia extends Component
 {
+    use WithPagination;
     public $conectividad = [];
     public $idLab = '';
     public $idEqo = '';
-    public $codigo = '';
+    #[Url('Busqueda')]
     public $query = '';
 
     // Modal UI
     public $modalTitle = '';
     public $modalMessage = '';
     public $modalIcon = '';
+
+    public function mount()
+    {
+        $this->reset(['query', 'idLab', 'idEqo']);
+
+        // Limpia la URL sin recargar la página
+        if (request()->has('Busqueda')) {
+            redirect()->to('/ConectividadIncidencia');
+        }
+    }
 
     public $inputs = [
         'estado_conectividad'     => null,    // OK | FALLA
@@ -109,9 +121,8 @@ class ConectividadIncidencia extends Component
         $this->reset([
             'idLab',
             'idEqo',
-            'codigo',
             'query',
-            'conectividad'
+            'conectividad',
         ]);
 
         // Limpia el formulario visual
@@ -143,7 +154,12 @@ class ConectividadIncidencia extends Component
             $this->modalTitle = 'Falta seleccionar equipo';
             $this->modalMessage = 'Selecciona un equipo antes de registrar.';
             $this->modalIcon = 'bi bi-exclamation-triangle-fill text-warning';
-            $this->dispatch('modal-open');
+            $this->dispatch('modal-open', payload: [
+                'title'     => $this->modalTitle,
+                'message'   => $this->modalMessage,
+                'variant'   => 'warning',
+                'autoclose' => 2500,
+            ]);
             return;
         }
 
@@ -186,7 +202,12 @@ class ConectividadIncidencia extends Component
                 $this->modalTitle   = 'Sin cambios';
                 $this->modalMessage = 'No hay modificaciones respecto a lo ya registrado hoy.';
                 $this->modalIcon    = 'bi bi-exclamation-triangle-fill text-warning';
-                $this->dispatch('modal-open');
+                $this->dispatch('modal-open', payload: [
+                    'title'     => $this->modalTitle,
+                    'message'   => $this->modalMessage,
+                    'variant'   => 'warning',
+                    'autoclose' => 2500,
+                ]);
                 return;
             }
 
@@ -245,7 +266,12 @@ class ConectividadIncidencia extends Component
             $this->modalTitle = '¡Éxito!';
             $this->modalMessage = 'Conectividad e incidencias de red registradas/actualizadas para hoy.';
             $this->modalIcon = 'bi bi-check-circle-fill text-success';
-            $this->dispatch('modal-open');
+            $this->dispatch('modal-open', payload: [
+                'title'     => $this->modalTitle,
+                'message'   => $this->modalMessage,
+                'variant'   => 'success',
+                'autoclose' => 2200, // cierra solo
+            ]);
             $this->limpiar();
         } catch (\Throwable $e) {
             DB::rollBack();
@@ -256,36 +282,81 @@ class ConectividadIncidencia extends Component
             $this->modalTitle = 'Error';
             $this->modalMessage = 'Ocurrió un problema al registrar.';
             $this->modalIcon = 'bi bi-x-circle-fill text-danger';
-            $this->dispatch('modal-open');
+            $this->dispatch('modal-open', payload: [
+                'title'     => $this->modalTitle,
+                'message'   => $this->modalMessage,
+                'variant'   => 'warning',
+                'autoclose' => 2500,
+            ]);
         }
     }
-
-    #[On('barcode-scanned')]
-    public function handleBarcode($payload): void
+    public function updatedQuery()
     {
-        $raw  = is_array($payload) ? ($payload['codigo'] ?? '') : (string)$payload;
-        $code = preg_replace('/\D+/', '', $raw);
-        if ($code === '') return;
 
-        static $last = null;            // antirebote
-        if ($last === $code) return;
-        $last = $code;
-
-        $this->selectByBarcode($code);
+        if (preg_match('/^[0-9]{8,20}$/', trim($this->query ?? ''))) {
+            $this->onCodeDetected($this->query);
+        }
     }
+    #[On('scanner:code-detected')]
+    public function onCodeDetected(string $code)
+    {
+        $this->query = trim($code);
+        $this->resetPage();
 
-    /**
-     * Escoge lab/equipo a partir del código del periférico,
-     * carga estados de hoy y refresca la lista de mantenimientos.
-     */
+        // Busca el equipo por su Código de Inventario
+        $item = periferico::with('tipoperiferico')
+            ->where('CodigoInventarioPef', $this->query)
+            ->first();
 
+        if ($item) {
+            // ✅ sincroniza los selects
+            $this->idLab  =  $item->equipo->IdLab;
+            $this->idEqo  =  $item->IdEqo;
+
+            // Mensaje de confirmación
+            $this->modalTitle   = 'Equipo encontrado';
+            $this->modalMessage = sprintf(
+                '%s • %s • %s',
+                $item->CodigoInventarioPef,
+                $item->tipoperiferico->NombreTpf ?? '—',
+                $item->EstadoPef ? 'Activo' : 'Inactivo'
+            );
+            $this->modalIcon    = 'bi bi-check-circle-fill text-success';
+
+            $this->updatedIdEqo();
+
+            // Abre el modal de confirmación (usa tu util existente)
+            $this->dispatch('modal-open', payload: [
+                'title'     => $this->modalTitle,
+                'message'   => $this->modalMessage,
+                'variant'   => 'success',
+                'autoclose' => 2200, // cierra solo
+            ]);
+        } else {
+            // Limpia filtros si no se halló
+            $this->idLab = null;
+            $this->idEqo = null;
+
+            $this->modalTitle   = 'Sin coincidencias';
+            $this->modalMessage = 'No existe un periférico con ese código.';
+            $this->modalIcon    = 'bi bi-exclamation-triangle-fill text-warning';
+
+            $this->dispatch('modal-open', payload: [
+                'title'     => $this->modalTitle,
+                'message'   => $this->modalMessage,
+                'variant'   => 'warning',
+                'autoclose' => 2500,
+            ]);
+        }
+    }
+    /*
     public function selectByBarcode(string $codigo): void
     {
         $codigo = trim($codigo);
         if ($codigo === '') return;
 
         // (opcional) mostrar el valor en tu input
-        $this->codigo = $codigo;
+        $this->query = $codigo;
 
         // OJO: agrupa el orWhere con una closure para mantener la precedencia
         $periferico = periferico::with('equipo')
@@ -321,7 +392,7 @@ class ConectividadIncidencia extends Component
         $this->modalIcon    = 'bi bi-check-circle-fill text-success';
         $this->dispatch('modal-open');
     }
-
+    */
     #[On('refresh')]
     public function refrescar()
     {
@@ -333,7 +404,7 @@ class ConectividadIncidencia extends Component
     {
         $laboratorios = laboratorio::orderBy('NombreLab')->get();
         $equipos = $this->idLab
-            ? equipo::where('IdLab', $this->idLab)->orderByRaw('CAST(SUBSTRING(NombreEqo,3) AS UNSIGNED) ASC')->get()
+            ? equipo::where('IdLab', $this->idLab)->orderByRaw('CAST(SUBSTRING(NombreEqo,4) AS UNSIGNED) ASC')->get()
             : collect();
 
         return view('livewire.conectividad-incidencia.conectividad-incidencia', [
