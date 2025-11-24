@@ -29,7 +29,7 @@ class equipo extends Model
         return $this->hasMany(periferico::class, 'IdEqo', 'IdEqo');
     }
 
-    public function scopeSearch($query, $search = null, $idLab = null)
+    public function scopeSearch($query, $search = null, $idLab = null, $estado = null)
     {
         if (!empty($search)) {
             return $query->where(function ($q) use ($search) {
@@ -39,6 +39,9 @@ class equipo extends Model
         }
         if (!empty($idLab)) {
             $query->where('IdLab', $idLab);
+        }
+        if ($estado !== null && $estado !== '') {
+            $query->where('EstadoEqo', $estado);
         }
         return $query;
     }

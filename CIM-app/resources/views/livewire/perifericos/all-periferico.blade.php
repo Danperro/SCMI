@@ -55,7 +55,7 @@
                 <div class="col-md-2 d-flex align-items-end">
                     <button type="button" class="btn btn-outline-secondary w-160" wire:click.prevent="limpiar">
                         <i class="bi bi-eraser me-1"></i>
-                        Limpiar
+                        Limpiar Filtros
                     </button>
                 </div>
             </form>

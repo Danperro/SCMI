@@ -4,7 +4,7 @@
     <div class="card mb-3">
         <div class="card-body">
             <h2 class="h3 mb-0 text-center">
-                Registrar mantenimientos preventivos a equipos
+                Realizar Mantenimiento Preventivo a Equipos de Computo
             </h2>
         </div>
     </div>
@@ -13,7 +13,7 @@
     <div class="card mb-4 shadow-sm">
         <div class="card-body">
             <div class="row g-3 align-items-end">
-                <div class="col-12 col-lg-3">
+                <div class="col-12 col-lg-4">
                     <label for="query" class="form-label fw-semibold">Código del periferico o equipo</label>
                     <div class="input-group has-validation">
                         <input id="query" type="text" class="form-control @error('query') is-invalid @enderror"
@@ -33,7 +33,7 @@
                     </div>
                 </div>
 
-                <div class="col-12 col-lg-2">
+                <div class="col-12 col-lg-3">
                     <label for="idLab" class="form-label fw-semibold">Seleccionar laboratorio</label>
                     <select id="idLab" class="form-select" wire:model.live="idLab">
                         <option value="" hidden>Seleccionar</option>
@@ -43,22 +43,12 @@
                     </select>
                 </div>
 
-                <div class="col-12 col-lg-2">
+                <div class="col-12 col-lg-3">
                     <label for="idEqo" class="form-label fw-semibold">Seleccionar equipo</label>
                     <select id="idEqo" class="form-select" wire:model.live="idEqo" @disabled(@empty($idLab))>
                         <option value="" hidden>Seleccionar</option>
                         @foreach ($equipos as $eqo)
                             <option value="{{ $eqo->IdEqo }}">{{ $eqo->NombreEqo }}</option>
-                        @endforeach
-                    </select>
-                </div>
-
-                <div class="col-12 col-lg-3">
-                    <label for="idTpm" class="form-label fw-semibold">Seleccionar Tipo</label>
-                    <select id="idTpm" class="form-select" wire:model.live="idTpm" @disabled(@empty($idEqo))>
-                        <option value="" hidden>Tipo</option>
-                        @foreach ($tipoman as $tip)
-                            <option value="{{ $tip->IdTpm }}">{{ $tip->NombreTpm }}</option>
                         @endforeach
                     </select>
                 </div>

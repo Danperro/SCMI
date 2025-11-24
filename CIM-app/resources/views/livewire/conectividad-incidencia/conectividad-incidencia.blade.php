@@ -2,7 +2,7 @@
     <div class="card mb-3">
         <div class="card-body">
             <h3 class="title mb-0 text-center">
-                Validación del Estado de Conectividad y Verificación de Incidencias de Riesgos Informáticos
+                Realizar la Validación del Estado de Conectividad y Verificación de Incidencias de Riesgos Informáticos a Equipos de Computo
             </h3>
         </div>
     </div>

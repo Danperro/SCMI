@@ -29,6 +29,14 @@
                         @endforeach
                     </select>
                 </div>
+                <div class="col-md-2">
+                    <label for="estadoFiltro" class="form-label">Estado</label>
+                    <select id="estadoFiltro" wire:model.live="estadoFiltro" class="form-select">
+                        <option value="" hidden>Seleccionar</option>
+                        <option value="1">Activo</option>
+                        <option value="0">Inactivo</option>
+                    </select>
+                </div>
                 <div class="col-md-2 d-flex align-items-end">
                     <button type="button" class="btn btn-outline-secondary w-100" wire:click.prevent="limpiar">
                         <i class="bi bi-eraser me-1"></i>

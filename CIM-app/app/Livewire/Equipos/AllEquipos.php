@@ -21,6 +21,7 @@ class AllEquipos extends Component
     use WithPagination;
     protected $paginationTheme = 'bootstrap';
     public $idLabFiltro;
+    public $estadoFiltro;
     public $idEqo, $idLab, $nombreEqo, $codigoEqo,
         $mostrarPerifericos = [],
         $mostrarEquipos = [],
@@ -321,7 +322,7 @@ class AllEquipos extends Component
         }
         $tiposperifericos = tipoperiferico::get();
         $equipos = equipo::with('laboratorio')
-            ->search($this->query, $this->idLabFiltro)
+            ->search($this->query, $this->idLabFiltro, $this->estadoFiltro)
             ->orderByRaw('LENGTH(NombreEqo) ASC, NombreEqo ASC')
             ->paginate(15);
         return view('livewire.equipos.all-equipos', [

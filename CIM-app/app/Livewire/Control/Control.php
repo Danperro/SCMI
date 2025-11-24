@@ -122,7 +122,7 @@ class Control extends Component
 
     public function updatedIdEqo()
     {
-
+        $this->mostrarInformesPreventivos();
         $this->idMan = ((int)$this->idTpm === 2)
             ? []                                   // Correctivo: vacíos
             : $this->obtenerIdsMantenimientosHoy(); // Preventivo: lo de hoy
@@ -136,8 +136,18 @@ class Control extends Component
         }
     }
 
+    public function mostrarInformesPreventivos()
+    {
+        $this->idTpm = 1;
+        $this->mantsoft = mantenimiento::where('IdTpm', 1)->where('IdClm', 1)->get();
+        $this->manthard = mantenimiento::where('IdTpm', 1)->where('IdClm', 2)->get();
+        $this->idMan = $this->obtenerIdsMantenimientosHoy();
+    }
     public function updatedIdTpm()
     {
+
+        /*
+        $this->idTpm === '2';
         if ((int)$this->idTpm === 2) {
             $this->idMan = [];
         } else {
@@ -149,6 +159,7 @@ class Control extends Component
                 ->where('IdClm', $this->idClm)
                 ->get();
         }
+        */
     }
 
     public function obtenerIdsMantenimientosHoy()
@@ -180,7 +191,7 @@ class Control extends Component
     #[On('scanner:code-detected')]
     public function onCodeDetected(string $code)
     {
-        
+
         $this->query = trim($code);
         $this->resetPage();
 
@@ -194,6 +205,8 @@ class Control extends Component
             $this->idLab  =  $item->equipo->IdLab;
             $this->equipos = equipo::get();
             $this->idEqo  =  $item->IdEqo;
+
+            $this->mostrarInformesPreventivos();
 
             // Mensaje de confirmación
             $this->modalTitle   = 'Equipo encontrado';
@@ -459,7 +472,6 @@ class Control extends Component
         } else {
             $this->equipos = equipo::get();
         }
-        $tipoman = tipomantenimiento::get();
         $claseman = clasemantenimiento::get();
 
         $usuarios = usuario::with(['persona', 'rol'])->where('IdRol', 2)->get();
@@ -468,7 +480,6 @@ class Control extends Component
             'laboratorios' => $laboratorios,
 
             'equipos' => $this->equipos,
-            'tipoman' => $tipoman,
             'claseman' => $claseman,
             'mansoft' => $this->mantsoft,
             'manhard' => $this->manthard,
