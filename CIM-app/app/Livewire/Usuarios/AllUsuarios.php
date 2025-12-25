@@ -25,56 +25,125 @@ class AllUsuarios extends Component
     public $laboratoriosPorArea = [];
     public $laboratoriosSeleccionados = [];
     public $usernameUsa, $passwordUsa, $nombrePer, $apellidoPaternoPer, $apellidoMaternoPer, $correoPer, $dniPer,
-        $telefonoPer, $fechaNacimientoPer;
+        $telefonoPer, $fechaNacimientoPer, $estadoFiltro;
     #[Url('Busqueda')]
     public $query = '';
+
     public function limpiar()
     {
-        $this->reset();
+        $this->reset([
+            'usernameUsa',
+            'passwordUsa',
+
+            'nombrePer',
+            'apellidoPaternoPer',
+            'apellidoMaternoPer',
+            'correoPer',
+            'dniPer',
+            'telefonoPer',
+            'fechaNacimientoPer',
+
+            'idRol',
+            'idAre',
+
+            'laboratoriosSeleccionados',
+            'laboratoriosPorArea',
+        ]);
+
         $this->resetErrorBag();
     }
+
     public function selectInfo($id)
     {
+        $this->resetErrorBag();
         $this->idUsa = $id;
-        $usuario = usuario::find($id);
+        $usuario = usuario::with(['persona', 'detalleusuario.laboratorio'])->findOrFail($id);
+
         $this->usernameUsa = $usuario->UsernameUsa;
+        $this->idRol = $usuario->IdRol;
+        $this->passwordUsa = '';
+
+        $per = $usuario->persona;
+        $this->nombrePer           = $per->NombrePer;
+        $this->apellidoPaternoPer  = $per->ApellidoPaternoPer;
+        $this->apellidoMaternoPer  = $per->ApellidoMaternoPer;
+        $this->dniPer              = $per->DniPer;
+        $this->telefonoPer         = $per->TelefonoPer;
+        $this->correoPer           = $per->CorreoPer;
+        $this->fechaNacimientoPer  = $per->FechaNacimientoPer;
+
+        $this->idPer = $per->IdPer;
+
+        $primerDet = $usuario->detalleusuario()->with('laboratorio')->first();
+        $this->idAre = $primerDet?->laboratorio?->IdAre;
+
+        $this->cargarLaboratorios();
+
+        $this->laboratoriosSeleccionados = $usuario->detalleusuario()->pluck('IdLab')->toArray() ?? [];
     }
+
     public function limpiarfiltros()
     {
-        $this->reset(['query', 'idRol']);
+        $this->reset(['query', 'idRol', 'estadoFiltro']);
     }
+
     public function rules(): array
     {
-        $isUpdate = filled($this->idUsa);
+        // Si idUsa tiene valor → estamos EDITANDO
+        if (filled($this->idUsa)) {
+            return [
+                'usernameUsa' => [
+                    'required',
+                    'string',
+                    Rule::unique('usuario', 'UsernameUsa')->ignore($this->idUsa, 'IdUsa'),
+                ],
+                'passwordUsa' => ['nullable', 'string', 'min:6'],
 
+                'nombrePer' => ['required', 'regex:/^[\pL\s\-]+$/u'],
+                'apellidoPaternoPer' => ['required', 'regex:/^[\pL\s\-]+$/u'],
+                'apellidoMaternoPer' => ['required', 'regex:/^[\pL\s\-]+$/u'],
+
+                'correoPer' => [
+                    'required',
+                    'email',
+                    Rule::unique('persona', 'CorreoPer')->ignore($this->idPer, 'IdPer')
+                ],
+                'dniPer' => [
+                    'required',
+                    'regex:/^\d{8}$/',
+                    Rule::unique('persona', 'DniPer')->ignore($this->idPer, 'IdPer')
+                ],
+                'telefonoPer' => ['required', 'regex:/^9\d{8}$/'],
+
+                'idRol' => ['required'],
+                'idAre' => ['required'],
+                'fechaNacimientoPer' => ['required', 'date', 'before:' . now()->subYears(18)],
+
+                'laboratoriosSeleccionados'   => ['required', 'array', 'min:1'],
+                'laboratoriosSeleccionados.*' => [
+                    Rule::exists('laboratorio', 'IdLab')
+                        ->where(fn($q) => $q->where('IdAre', $this->idAre)),
+                ],
+            ];
+        }
+
+        // Si idUsa es null → estamos CREANDO
         return [
-            'usernameUsa' => [
-                'required',
-                'string',
-                Rule::unique('usuario', 'UsernameUsa')->ignore($this->idUsa, 'IdUsa'),
-            ],
-            'passwordUsa' => [$isUpdate ? 'nullable' : 'required', 'string', 'min:6'],
+            'usernameUsa' => ['required', 'string', Rule::unique('usuario', 'UsernameUsa')],
+            'passwordUsa' => ['required', 'string', 'min:6'],
 
             'nombrePer' => ['required', 'regex:/^[\pL\s\-]+$/u'],
             'apellidoPaternoPer' => ['required', 'regex:/^[\pL\s\-]+$/u'],
             'apellidoMaternoPer' => ['required', 'regex:/^[\pL\s\-]+$/u'],
 
-            // Usa IGNORE por IdPer para que no tengas que validar “si cambió”
-            'correoPer' => [
-                'required',
-                'email',
-                Rule::unique('persona', 'CorreoPer')->ignore($this->idPer, 'IdPer')
-            ],
-            'dniPer' => [
-                'required',
-                'regex:/^\d{8}$/',
-                Rule::unique('persona', 'DniPer')->ignore($this->idPer, 'IdPer')
-            ],
+            'correoPer'   => ['required', 'email', Rule::unique('persona', 'CorreoPer')],
+            'dniPer'      => ['required', 'regex:/^\d{8}$/', Rule::unique('persona', 'DniPer')],
+
             'telefonoPer' => ['required', 'regex:/^9\d{8}$/'],
 
-            'idRol' => ['required', 'exists:rol,IdRol'],
-            'idAre' => ['required', 'exists:area,IdAre'],
-            'fechaNacimientoPer' => ['required', 'date', 'before:' . now()->subYears(18)->toDateString()],
+            'idRol' => ['required'],
+            'idAre' => ['required'],
+            'fechaNacimientoPer' => ['required', 'date', 'before:' . now()->subYears(18)],
 
             'laboratoriosSeleccionados'   => ['required', 'array', 'min:1'],
             'laboratoriosSeleccionados.*' => [
@@ -83,6 +152,8 @@ class AllUsuarios extends Component
             ],
         ];
     }
+
+
     public function cargarLaboratorios()
     {
         if (empty($this->idAre)) {
@@ -132,35 +203,6 @@ class AllUsuarios extends Component
         'laboratoriosSeleccionados.min'      => 'Seleccione al menos un laboratorio.',
         'laboratoriosSeleccionados.*.exists' => 'Uno o más laboratorios no pertenecen al área seleccionada.',
     ];
-
-
-    public function cargarDatosParaEditar($id)
-    {
-        $this->idUsa = $id;
-        $usuario = usuario::with(['persona', 'detalleusuario.laboratorio'])->findOrFail($id);
-
-        $this->usernameUsa = $usuario->UsernameUsa;
-        $this->idRol = $usuario->IdRol;
-        $this->passwordUsa = ''; // no se muestra por seguridad
-
-        // Datos persona
-        $per = $usuario->persona;
-        $this->nombrePer           = $per->NombrePer;
-        $this->apellidoPaternoPer  = $per->ApellidoPaternoPer;
-        $this->apellidoMaternoPer  = $per->ApellidoMaternoPer;
-        $this->dniPer              = $per->DniPer;
-        $this->telefonoPer         = $per->TelefonoPer;
-        $this->correoPer           = $per->CorreoPer;
-        $this->fechaNacimientoPer  = $per->FechaNacimientoPer;
-
-        $this->idPer = $usuario->persona->IdPer; // <- clave para unique con ignore
-
-        // área + labs
-        $primerDet = $usuario->detalleusuario()->with('laboratorio')->first();
-        $this->idAre = $primerDet?->laboratorio?->IdAre;
-        $this->cargarLaboratorios();
-        $this->laboratoriosSeleccionados = $usuario->detalleusuario()->pluck('IdLab')->toArray() ?? [];
-    }
 
     public function updated($prop)
     {
@@ -337,13 +379,14 @@ class AllUsuarios extends Component
             $this->dispatch('toast-danger', message: 'Ocurrio al eliminar');
         }
     }
+
     public function render()
     {
         $roles = rol::get();
         $areas = area::get();
         $laboratorios = laboratorio::get();
         $usuarios = usuario::with(['persona', 'rol'])
-            ->search($this->query, $this->idRol) // ← usa el scope
+            ->search($this->query, $this->idRol, $this->estadoFiltro) // ← usa el scope
             ->paginate(10);
 
         return view('livewire.usuarios.all-usuarios', [

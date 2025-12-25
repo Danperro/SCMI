@@ -15,13 +15,20 @@ return new class extends Migration
             $table->id('IdPef');
             $table->bigInteger('IdTpf')->unsigned();
             $table->bigInteger('IdEqo')->unsigned()->nullable();
-            $table->string('CiuPef');
-            $table->string('CodigoInventarioPef');
-            $table->string('MarcaPef');
-            $table->string('ColorPef');
+            $table->string('CiuPef', 10);
+            $table->string('CodigoInventarioPef', 100)->unique();
+            $table->unsignedBigInteger('IdMarcaCat'); // catálogo
+            $table->unsignedBigInteger('IdColorCat'); // catálogo
             $table->boolean('EstadoPef');
             $table->foreign('IdTpf')->references('IdTpf')->on('tipoperiferico')->onDelete('cascade');
             $table->foreign('IdEqo')->references('IdEqo')->on('equipo')->onDelete('set null');
+            $table->foreign('IdMarcaCat')
+                ->references('IdCat')
+                ->on('catalogo');
+
+            $table->foreign('IdColorCat')
+                ->references('IdCat')
+                ->on('catalogo');
             $table->timestamps();
         });
     }

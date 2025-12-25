@@ -123,7 +123,8 @@ class AllPeriferico extends Component
             'idTpf' => ['required', 'integer', "exists:{$tpfTable},IdTpf"],
 
             // Si CiuPef es foránea a otra tabla, cambia a 'integer' + exists:<tabla>,<columna>.
-            'ciuPef' => ['nullable', 'string', 'max:100'],
+            'ciuPef' => ['required', 'digits:5'],
+            'ciuPef' => ['required', 'regex:/^[0-9]{5}$/'],
 
             'marcaPef' => ['required', 'string', 'max:100'],
             'colorPef' => ['nullable', 'string', 'max:50'],
@@ -138,7 +139,8 @@ class AllPeriferico extends Component
         'idTpf.required' => 'Selecciona el tipo de periférico.',
         'idTpf.exists'   => 'Tipo de periférico inválido.',
 
-        'ciuPef.max'   => 'Máximo 100 caracteres para la ciudad/ubicación.',
+        'ciuPef.required' => 'El código CIU es obligatorio.',
+        'ciuPef.regex' => 'El código CIU debe tener exactamente 5 dígitos numéricos.',
 
         'marcaPef.required' => 'La marca es obligatoria.',
         'marcaPef.max'      => 'Máximo 100 caracteres para la marca.',

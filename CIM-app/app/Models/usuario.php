@@ -29,7 +29,7 @@ class usuario extends Authenticatable
         return $this->PasswordUsa;
     }
 
-    public function scopeSearch($query, $search, $idRol)
+    public function scopeSearch($query, $search, $idRol, $estado)
     {
         $query->when($search, function ($query) use ($search) {
             $s = mb_strtolower(trim($search), 'UTF-8');
@@ -45,6 +45,9 @@ class usuario extends Authenticatable
         });
         $query->when($idRol, fn($query) => $query->where('IdRol', $idRol));
 
+        if ($estado !== null && $estado !== '') {
+            $query->where('EstadoUsa', $estado);
+        }
         return $query;
     }
     // Relaciones

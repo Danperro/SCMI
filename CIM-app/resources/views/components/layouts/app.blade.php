@@ -45,6 +45,7 @@
             overscroll-behavior: contain;
             /* evita que se arrastre el fondo */
             overflow-y: auto;
+            touch-action: pan-y !important;
         }
 
         body.sidebar-open {
@@ -225,6 +226,11 @@
 
         /* Responsive Design */
         @media (max-width: 992px) {
+            .content-area {
+                padding-top: 110px !important;
+                /* evita que el header lo tape */
+            }
+
             .sidebar {
                 transform: translateX(-100%);
             }
@@ -268,6 +274,7 @@
             }
         }
 
+
         /*aaaa
         /* Sidebar móvil oculto */
     </style>
@@ -276,6 +283,27 @@
 <body>
     <div id="overlay" class="overlay"></div>
     <div class="main-container">
+        <!-- Barra móvil superior -->
+        <nav id="mobileHeader" class="d-lg-none fixed-top d-flex align-items-center justify-content-between px-3"
+            style="
+        height: 96px;
+        background-color: #1a1a1a;
+        z-index: 1080;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+        padding-top: 1.5rem;
+        padding-bottom: 1.5rem;
+    ">
+
+            <div class="d-flex align-items-center text-white text-decoration-none">
+                <i class="bi bi-pc-display-horizontal me-2" style="font-size: 2.5rem; color: #1e6b3a;"></i>
+                <span class="fw-bold" style="font-size: 2rem;">SCIM</span>
+            </div>
+
+            <button id="mobileMenuBtn" class="btn btn-link text-white p-0" style="font-size: 2.3rem;">
+                <i class="bi bi-list"></i>
+            </button>
+        </nav>
+
         <!-- Sidebar -->
         <nav class="sidebar" id="sidebar">
             <div class="d-flex flex-column" style="height: 100%; overflow-y: auto;">
@@ -375,7 +403,8 @@
                             </button>
                             <ul class="collapse list-unstyled ps-3" id="grp-espacios">
                                 <li>
-                                    <a href="/Laboratorios" class="nav-link text-white d-flex align-items-center gap-2">
+                                    <a href="/Laboratorios"
+                                        class="nav-link text-white d-flex align-items-center gap-2">
                                         <i class="bi bi-building"></i> Gestión de Laboratorios
                                     </a>
                                 </li>
@@ -531,7 +560,12 @@
             // --- Botón hamburguesa (MÓVIL) ---
             if (mobileMenuBtn) {
                 mobileMenuBtn.addEventListener("click", function() {
-                    openMobile();
+                    const sidebarOpen = sidebar.classList.contains("show");
+                    if (sidebarOpen) {
+                        closeMobile();
+                    } else {
+                        openMobile();
+                    }
                 });
             }
 
@@ -633,97 +667,6 @@
                     if (triggerBtn) triggerBtn.setAttribute("aria-expanded", "true");
                 }
             }
-
-            /* ============================================================
-               GESTO GLOBAL (desde cualquier parte de la pantalla)
-               ============================================================ */
-            let startX = 0;
-            let startY = 0;
-            let dragging = false;
-            let isHorizontal = false;
-
-            const THRESHOLD = 20; // Qué tan horizontal debe ser el gesto
-            const SWIPE_MIN = 60; // Distancia mínima para abrir/cerrar
-
-            document.addEventListener("touchstart", (e) => {
-                if (window.innerWidth >= 992) return;
-
-                const t = e.touches[0];
-                startX = t.clientX;
-                startY = t.clientY;
-                dragging = true;
-                isHorizontal = false;
-
-                sidebar.style.transition = "none";
-                overlay.style.transition = "none";
-            });
-
-            function handleTouchMove(e) {
-                if (!dragging) return;
-                if (window.innerWidth >= 992) return;
-
-                const t = e.touches[0];
-                const deltaX = t.clientX - startX;
-                const deltaY = Math.abs(t.clientY - startY);
-
-                // Detectar si el gesto es horizontal
-                if (!isHorizontal) {
-                    if (deltaY > THRESHOLD) {
-                        dragging = false;
-                        return;
-                    }
-                    if (Math.abs(deltaX) > THRESHOLD) {
-                        isHorizontal = true;
-                    }
-                }
-
-                if (!isHorizontal) return;
-
-                const sidebarOpen = sidebar.classList.contains("show");
-
-                // Abrir (swipe derecha)
-                if (!sidebarOpen) {
-                    let pos = Math.min(0, -260 + deltaX);
-                    sidebar.style.transform = `translateX(${pos}px)`;
-                    overlay.style.opacity = Math.min(1, deltaX / 260);
-                    overlay.style.display = "block";
-                }
-                // Cerrar (swipe izquierda)
-                else {
-                    let pos = Math.max(-260, deltaX);
-                    sidebar.style.transform = `translateX(${pos}px)`;
-                    overlay.style.opacity = Math.max(0, 1 - Math.abs(deltaX) / 260);
-                }
-
-                e.preventDefault(); // Evita gesto del navegador
-            }
-
-            document.addEventListener("touchmove", handleTouchMove, {
-                passive: false
-            });
-
-            document.addEventListener("touchend", (e) => {
-                if (!dragging || !isHorizontal) return;
-                dragging = false;
-
-                const endX = e.changedTouches[0].clientX;
-                const deltaX = endX - startX;
-
-                sidebar.style.transition = "";
-                overlay.style.transition = "";
-
-                const sidebarOpen = sidebar.classList.contains("show");
-
-                if (!sidebarOpen) {
-                    if (deltaX > SWIPE_MIN) openMobile();
-                    else closeMobile();
-                } else {
-                    if (deltaX < -SWIPE_MIN) closeMobile();
-                    else openMobile();
-                }
-
-                sidebar.style.transform = "";
-            });
 
 
         });

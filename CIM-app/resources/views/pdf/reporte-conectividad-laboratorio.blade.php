@@ -12,18 +12,29 @@
             src: url("fonts/DejaVuSans.ttf") format("truetype");
         }
 
+        @page {
+            margin: 10px;
+        }
+
         body {
             font-family: "DejaVu Sans", sans-serif;
-            font-size: 9px;
+            font-size: 8px;
         }
 
         .encabezado {
             width: 100%;
             display: table;
             /* DOMPDF-friendly */
-            background-color: #cce4cc;
+            background-color: #155529;
+            /* VERDE FORMAL */
             border: 1px solid #000;
             padding: 10px 15px;
+            color: white;
+        }
+
+        .encabezado .titulo h1,
+        .encabezado .titulo h3 {
+            color: white;
         }
 
         .encabezado .titulo {
@@ -57,48 +68,37 @@
             height: auto;
         }
 
-
-        .datos-generales {
-            display: flex;
+        .datos-generales,
+        .fila-datos {
+            display: table;
+            width: 100%;
             justify-content: space-between;
-            align-items: center;
+            align-items: flex-start;
             border: 1px solid #000;
             padding: 6px 12px;
             margin-top: 5px;
             font-size: 11px;
         }
 
-        .datos-generales p {
-            margin: 0;
-        }
-
-        .fila-datos {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border: 1px solid #000;
-            padding: 6px 10px;
-            margin-top: 10px;
-            font-size: 11px;
-        }
-
+        .datos-generales p,
         .fila-datos p {
             margin: 0;
         }
 
-
         .titulo-seccion {
-            background-color: #a8d5a8;
+            background-color: #1e6b3a;
+            /* VERDE FORMAL */
             font-weight: bold;
             text-align: left;
             padding: 5px;
             font-size: 11px;
             margin-top: 12px;
+            color: white;
         }
 
         table {
             width: 100%;
-            border-collapse: collapse;
+            border-collapse: none;
             margin-top: 6px;
         }
 
@@ -110,7 +110,9 @@
         }
 
         th {
-            background-color: #e0f2e0;
+            background-color: #155529;
+            /* VERDE FORMAL */
+            color: white;
             font-size: 10px;
         }
 
@@ -124,11 +126,40 @@
         }
 
         .firmas td {
-            height: 50px;
+            height: 90px;
             vertical-align: top;
             text-align: center;
         }
+
+        /* Anchos personalizados */
+        .col-realizado {
+            width: 25%;
+        }
+
+        .col-verificado {
+            width: 25%;
+        }
+
+        .col-observaciones {
+            width: 50%;
+        }
+
+        .fila-datos .info,
+        .fila-datos .glosario {
+            display: table-cell;
+            width: 50%;
+            vertical-align: top;
+        }
+
+        .fila-datos .info {
+            text-align: left;
+        }
+
+        .fila-datos .glosario {
+            text-align: right;
+        }
     </style>
+
 </head>
 
 <body>
@@ -145,21 +176,31 @@
         </div>
     </div>
 
-    {{-- DATOS GENERALES --}}
     <div class="fila-datos">
-        <p><strong>Laboratorio:</strong> {{ $detalleLab->laboratorio->NombreLab }}</p>
-        <p><strong>Fecha:</strong> {{ \Carbon\Carbon::parse($detalleLab->FechaDtl)->format('d/m/Y') }}</p>
+        <div class="info">
+            <p><strong>Laboratorio:</strong> {{ $detalleLab->laboratorio->NombreLab }}</p>
+            <p><strong>Fecha:</strong> {{ \Carbon\Carbon::parse($detalleLab->FechaDtl)->format('d/m/Y') }}</p>
+        </div>
+
+        <div class="glosario">
+            <p><strong>F:</strong> Falla &nbsp;&nbsp; <strong>✓:</strong> Correcto &nbsp;&nbsp;
+                <strong>A:</strong> Actualizado &nbsp;&nbsp;<strong>P:</strong>Pendiente &nbsp;&nbsp;
+            </p>
+            <p> <strong>C:</strong>
+                Cable &nbsp;&nbsp;<strong>W:</strong> Wifi &nbsp;&nbsp;
+                <strong>✓:</strong> Realizado &nbsp;&nbsp; <strong>X:</strong> No realizado
+            </p>
+        </div>
     </div>
 
 
 
-
     {{-- TABLA HARDWARE --}}
-    <div class="titulo-seccion">MANTENIMIENTO PREVENTIVO DE HARDWARE</div>
+    <div class="titulo-seccion">ESTADO DE CONECTIVIDAD E INCIDENCIAS</div>
     <table>
         <thead>
             <tr>
-                <th>Mantenimiento</th>
+                <th>Estados e Incidencias</th>
                 @foreach ($equipos as $eq)
                     <th>{{ $eq->NombreEqo }}</th>
                 @endforeach
@@ -185,19 +226,20 @@
     <table class="firmas">
         <thead>
             <tr>
-                <th>Realizado por:</th>
-                <th>Verificado por:</th>
-                <th>Observaciones:</th>
+                <th class="col-realizado">Realizado por:</th>
+                <th class="col-verificado">Verificado por:</th>
+                <th class="col-observaciones">Observaciones:</th>
             </tr>
         </thead>
         <tbody>
             <tr>
-                <td>{{ $detalleLab->RealizadoDtl ?? '---' }}</td>
-                <td></td>
-                <td></td>
+                <td class="col-realizado">{{ $detalleLab->RealizadoDtl ?? '---' }}</td>
+                <td class="col-verificado"></td>
+                <td class="col-observaciones"></td>
             </tr>
         </tbody>
     </table>
+
 
 </body>
 

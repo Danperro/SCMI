@@ -66,7 +66,7 @@
     <form id="form-etiquetas" action="{{ route('perifericos.etiquetas.pdf') }}" method="POST" target="_blank">
         @csrf
         <div class="card">
-            <div class="table-responsive">
+            <div class="table-responsive no-swipe">
                 <table class="table table-hover align-middle mb-0">
                     <thead class="table-light">
                         <tr>
@@ -90,8 +90,8 @@
                                 </td>
                                 <td>{{ $pef->CodigoInventarioPef }}</td>
                                 <td>{{ $pef->tipoperiferico->NombreTpf ?? '—' }}</td>
-                                <td>{{ $pef->MarcaPef }}</td>
-                                <td>{{ $pef->ColorPef ?? '—' }}</td>
+                                <td>{{ $pef->marca->NombreCat }}</td>
+                                <td>{{ $pef->color->NombreCat ?? '—' }}</td>
                                 <td>{{ $pef->CiuPef ?? '—' }}</td>
                                 <td><span role="button"
                                         class="badge {{ $pef->EstadoPef ? 'bg-success' : 'bg-danger' }}">
@@ -187,9 +187,13 @@
                             </div>
                             <div class="col-md-6">
                                 <label for="marcaPef" class="form-label">Marca</label>
-                                <input type="text" id="marcaPef" name="marcaPef" class="form-control"
-                                    placeholder="Ej: HP" wire:model.live="marcaPef" required>
-                                @error('marcaPef')
+                                <select id="idMarcaCat" class="form select" wire:model.live="idMar">
+                                    <option value="" hidden>Seleccionar</option>
+                                    @foreach ($marcas as marca)
+                                        <option value="{{ $marca->IdMarcaCat }}">{{ $marca->NombreCat }}</option>
+                                    @endforeach
+                                </select>
+                                @error('idMarcaCat')
                                     <div class="invalid-feedback d-block">{{ $message }}</div>
                                 @enderror
                             </div>
@@ -200,6 +204,12 @@
                                 <label for="colorPef" class="form-label">Color</label>
                                 <input type="text" id="colorPef" name="colorPef" class="form-control"
                                     placeholder="Ej: Blanco" wire:model.live="colorPef">
+                                <select id="IdColorCat" class="form select" wire:model.live="idMar">
+                                    <option value="" hidden>Seleccionar</option>
+                                    @foreach ($marcas as marca)
+                                        <option value="{{ $marca->IdMarcaCat }}">{{ $marca->NombreCat }}</option>
+                                    @endforeach
+                                </select>
                                 @error('colorPef')
                                     <div class="invalid-feedback d-block">{{ $message }}</div>
                                 @enderror

@@ -14,8 +14,8 @@ class periferico extends Model
         'IdEqo',
         'CiuPef',
         'CodigoInventarioPef',
-        'MarcaPef',
-        'ColorPef',
+        'IdMarcaCat',
+        'IdColorCat',
         'EstadoPef'
     ];
 
@@ -31,12 +31,23 @@ class periferico extends Model
     {
         return $this->belongsTo(equipo::class, 'IdEqo', 'IdEqo');
     }
-    
-       public function equipos()
+
+    public function equipos()
     {
         return $this->hasMany(equipo::class, 'IdEqo', 'IdEqo');
     }
-    
+    // catálogo: marca
+    public function marca()
+    {
+        return $this->belongsTo(catalogo::class, 'IdMarcaCat', 'IdCat');
+    }
+
+    // catálogo: color
+    public function color()
+    {
+        return $this->belongsTo(catalogo::class, 'IdColorCat', 'IdCat');
+    }
+
     // Scope para buscar periférico por código de inventario
     public function scopeByInventario($query, string $codigo)
     {
@@ -62,7 +73,7 @@ class periferico extends Model
             $query->where('ColorPef', 'LIKE', '%' . trim($colorPef) . '%');
         }
         if ($estadoPef !== null && $estadoPef != '') {
-            $query->where('EstadoPef',(int) $estadoPef);
+            $query->where('EstadoPef', (int) $estadoPef);
         }
         // Búsqueda libre
         if (!empty($search)) {
